@@ -19,7 +19,7 @@ delay_cache(int n)
 	for(i = 0; i < n; i++)
 		;
 }
-void (*delay)(int n) = (void(*)(int))((byte*)delay_cache + 0x20000000);
+void (*delay)(int n) = (void(*)(int))((uintptr)delay_cache + 0x20000000);
 
 void
 printconfig(void)
@@ -168,8 +168,17 @@ generalExcept(void)
 	}
 }
 
-uint startprocB(void);
+void
+interrupt(Context *ctx)
+{
+	printf("interrupt\n");
+	printf(" %p %p %p\n", ctx->status, ctx->cause, ctx->epc);
+	timerint();
+}
+
+void startprocB(void);
 uint getpc(void);
+void enableint(void);
 
 int num = 0;
 #define num_C (*(int*)((uint)&num | KSEG1))
@@ -185,26 +194,31 @@ main(void)
 	printf("highmark: %x numpages: %x\n", SYS->highmark, SYS->numpages);
 
 	printf("hello from proc %d\n", mach->number);
-	printf("cache: %x tlb: %x sp: %p\n", mach->cachepolicy, mach->tlbsize, mach->sp);
-	printf("pc: %p\n", getpc());
+	printf("cache: %x tlb: %x kernelStack: %p\n", mach->cachePolicy, mach->TLBsize, mach->kernelStack);
+	getc0regs(&cpu);
+	printf("%p %p\n", cpu.ebase, cpu.intctl);
 
 //	printf("DMMAP: %x %x\n", GET32(0xb3010024), GET32(0xb3010028));
 //	for(p = (uint*)0x80010000; p < (uint*)0x80010010; p++)
 //		printf("%p: %p\n", p, *p);
 
-//	getc0regs(&cpu);
 //	printconfig();
 //	printsomeregs();
 
 	dosyscall();
 
-	startprocB();
+
+	enableint();
+
+	timer();
+
+//	startprocB();
 //	getc0regs(&cpu);
 //	printf("%p %p %p\n", cpu.corectrl, cpu.corestatus, cpu.reim);
 //	p = (uint*)(cpu.reim & 0xFFFF0000);
 //	printf(" -> %p: %p\n", p, *p);
 	for(;;){
-		delay(10000);
+		//delay(100000);
 		printf("%d\n", num);
 	}
 	ledloop();
@@ -214,8 +228,9 @@ void
 mainB(void)
 {
 	printf("hello from proc %d\n", mach->number);
-	printf("cache: %x tlb: %x sp: %p\n", mach->cachepolicy, mach->tlbsize, mach->sp);
-	printf("pc: %p\n", getpc());
+	printf("cache: %x tlb: %x kernelStack: %p\n", mach->cachePolicy, mach->TLBsize, mach->kernelStack);
+	getc0regs(&cpu);
+	printf("%p %p\n", cpu.ebase, cpu.intctl);
 	for(;;)
 		num++;
 	ledloopC();

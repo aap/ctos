@@ -75,5 +75,54 @@
 name:;                          \
 	.frame  sp,fsize,ra;
 
-#define SysHighmark	0x0
-#define SysNumpages	0x4
+	.struct 0
+SysHighmark:	.space 4
+SysNumpages:	.space 4
+
+
+	.struct 0
+MachNumber:		.space 4
+MachCachePolicy:	.space 4
+MachTLBsize:		.space 4
+MachKernelStack:	.space 4
+MachInterruptStack:	.space 4
+
+
+	.struct 0
+CtxAt:	.space 4
+CtxV0:	.space 4
+CtxV1:	.space 4
+CtxA0:	.space 4
+CtxA1:	.space 4
+CtxA2:	.space 4
+CtxA3:	.space 4
+CtxT0:	.space 4
+CtxT1:	.space 4
+CtxT2:	.space 4
+CtxT3:	.space 4
+CtxT4:	.space 4
+CtxT5:	.space 4
+CtxT6:	.space 4
+CtxT7:	.space 4
+CtxS0:	.space 4
+CtxS1:	.space 4
+CtxS2:	.space 4
+CtxS3:	.space 4
+CtxS4:	.space 4
+CtxS5:	.space 4
+CtxS6:	.space 4
+CtxS7:	.space 4
+CtxT8:	.space 4
+CtxT9:	.space 4
+CtxK0:	.space 4
+CtxK1:	.space 4
+CtxGp:	.space 4
+CtxSp:	.space 4
+CtxFp:	.space 4
+CtxRa:	.space 4
+CtxLo:	.space 4
+CtxHi:	.space 4
+CtxEpc:	.space 4
+CtxCause:	.space 4
+CtxStatus:	.space 4
+CtxSize:

@@ -14,8 +14,6 @@
 #define DCACHE_SIZE 8*128*LINE_SIZE
 #define ICACHE_SIZE 8*128*LINE_SIZE
 
-#define PROC_COUNT _start-KSEG0+KSEG1-4
-
 // loaded at virtual 0x8800_0000 via u-boot
 // physical dram at 0x2000_0000-0x6000_0000
 //  mirrored at 0x0000_0000 - 0x1000_0000
@@ -38,9 +36,6 @@ TEXT(_start, 0)
 	 addiu	t0,4
 	 bne	t1,t2,1b
 	 addiu	t1,4
-
-	// set processor counter to zero
-	sw	zero,PROC_COUNT
 
 	// clear bss
 	la	t0,_bss_start
@@ -131,27 +126,22 @@ TEXT(startup, 0)
 	la	gp,_gp
 	la	s7,sys-KSEG0+KSEG1
 
-	// get processor number (s6 = PROC_COUNT++)
-	la	t0,PROC_COUNT
-	lw	s6,(t0)
-	addiu	t1,s6,1
-	sw	t1,(t0)
+	// get processor number
+	mfc0	s6,c0_ebase
+	andi	s6,s6,0x3FF
 
-	// init some regs
-	mtc0	zero,c0_status
-	mtc0	zero,c0_pagemask
-	li	t1,1
-	mtc0	t1,c0_wired
-
-	// get processor information
+	// get cache policy
 	mfc0	s0,c0_config
 	andi	s0,s0,0x7	// kseg0 cache policy
 	sll	s1,s0,3
 
-	// Get 16k for the kernel stack
-	jal	allocpagesK0
-	li	a0,4
-	addiu	sp,v0,4*PAGE_SIZE
+	// init some regs
+	mtc0	zero,c0_status
+	mtc0	zero,c0_ebase		// exception base 0x80000000
+	mtc0	zero,c0_intctl		// all interrupts at same vector
+	mtc0	zero,c0_pagemask	// 4k pages
+	li	t1,1
+	mtc0	t1,c0_wired
 
 	// copy exception handlers and processor entry if boot processor
 	bnez	s6,2f
@@ -170,6 +160,11 @@ TEXT(startup, 0)
 	li	a0,KSEG0+0x180
 	la	a1,TrapGeneral
 	la	a2,TrapGeneral_end
+	jal	copy
+	// interrupt
+	li	a0,KSEG0+0x200
+	la	a1,Interrupt
+	la	a2,Interrupt_end
 	jal	copy
 	.set noreorder
 
@@ -226,10 +221,21 @@ TEXT(startup, 0)
 	tlbwi
 
 	// save processor config
-	sw	s6,0xffffe000	// processor number
-	sw	s0,0xffffe004	// cache policy
-	sw	t1,0xffffe008	// TLB size
-	sw	sp,0xffffe00C
+	sw	s6,MACHADDR + MachNumber
+	sw	s0,MACHADDR + MachCachePolicy
+	sw	t1,MACHADDR + MachTLBsize
+
+	// Get 16k for the kernel stack
+	jal	allocpagesK0
+	li	a0,4
+	addiu	sp,v0,4*PAGE_SIZE
+	sw	sp,MACHADDR + MachKernelStack
+
+	// Get 8k for the interrupt stack
+	jal	allocpagesK0
+	li	a0,2
+	addiu	sp,v0,2*PAGE_SIZE
+	sw	sp,MACHADDR + MachInterruptStack
 
 	bnez	s6,2f
 	nop
@@ -270,6 +276,16 @@ TEXT(startprocB, 0)
 	nop
 .end startprocB
 
+TEXT(enableint, 0)
+	.set noreorder
+	mfc0	t0,c0_status
+	ori	t0,t0,0x0401	// enable interrupts
+	mtc0	t0,c0_status
+	jr	ra
+	ehb
+	.set reorder
+.end enableint
+
 .set noreorder
 .set noat
 TrapTLB:
@@ -297,6 +313,103 @@ TrapGeneral:
 	nop
 	eret
 TrapGeneral_end:
+
+Interrupt:
+	.set noreorder
+	.set noat
+
+	lw	k0,MACHADDR + MachInterruptStack
+	addiu	k0,k0,CtxSize
+	sw	AT,CtxAt(k0)
+	sw	v0,CtxV0(k0)
+	sw	v1,CtxV1(k0)
+	sw	a0,CtxA0(k0)
+	sw	a1,CtxA1(k0)
+	sw	a2,CtxA2(k0)
+	sw	a3,CtxA3(k0)
+	sw	t0,CtxT0(k0)
+	sw	t1,CtxT1(k0)
+	sw	t2,CtxT2(k0)
+	sw	t3,CtxT3(k0)
+	sw	t4,CtxT4(k0)
+	sw	t5,CtxT5(k0)
+	sw	t6,CtxT6(k0)
+	sw	t7,CtxT7(k0)
+	sw	s0,CtxS0(k0)	// s0-7 really needed?
+	sw	s1,CtxS1(k0)
+	sw	s2,CtxS2(k0)
+	sw	s3,CtxS3(k0)
+	sw	s4,CtxS4(k0)
+	sw	s5,CtxS5(k0)
+	sw	s6,CtxS6(k0)
+	sw	s7,CtxS7(k0)
+	sw	t8,CtxT8(k0)
+	sw	t9,CtxT9(k0)
+	// k0...
+	sw	k1,CtxK1(k0)
+	sw	gp,CtxGp(k0)
+	sw	sp,CtxSp(k0)
+	sw	fp,CtxFp(k0)
+	sw	ra,CtxRa(k0)
+	mflo	t0
+	mfhi	t1
+	sw	t0,CtxLo(k0)
+	sw	t1,CtxHi(k0)
+	mfc0	t2,c0_epc
+	sw	t2,CtxEpc(k0)
+	mfc0	t3,c0_cause
+	sw	t3,CtxCause(k0)
+	mfc0	t4,c0_status
+	sw	t4,CtxStatus(k0)
+
+	move	sp,k0
+
+	la	t0,interrupt
+	jalr	t0
+	move	a0,sp
+
+	move	k0,sp
+	lw	t2,CtxEpc(k0)
+	mtc0	t2,c0_epc
+	lw	t1,CtxHi(k0)
+	lw	t0,CtxLo(k0)
+	mthi	t1
+	mtlo	t0
+	lw	ra,CtxRa(k0)
+	lw	fp,CtxFp(k0)
+	lw	sp,CtxSp(k0)
+	lw	gp,CtxGp(k0)
+	lw	k1,CtxK1(k0)
+	lw	t9,CtxT9(k0)
+	lw	t8,CtxT8(k0)
+	lw	s7,CtxS7(k0)
+	lw	s6,CtxS6(k0)
+	lw	s5,CtxS5(k0)
+	lw	s4,CtxS4(k0)
+	lw	s3,CtxS3(k0)
+	lw	s2,CtxS2(k0)
+	lw	s1,CtxS1(k0)
+	lw	s0,CtxS0(k0)
+	lw	t7,CtxT7(k0)
+	lw	t6,CtxT6(k0)
+	lw	t5,CtxT5(k0)
+	lw	t4,CtxT4(k0)
+	lw	t3,CtxT3(k0)
+	lw	t2,CtxT2(k0)
+	lw	t1,CtxT1(k0)
+	lw	t0,CtxT0(k0)
+	lw	a3,CtxA3(k0)
+	lw	a2,CtxA2(k0)
+	lw	a1,CtxA1(k0)
+	lw	a0,CtxA0(k0)
+	lw	v1,CtxV1(k0)
+	lw	v0,CtxV0(k0)
+	lw	AT,CtxAt(k0)
+	eret
+
+	.set reorder
+	.set at
+Interrupt_end:
 .set reorder
 .set at
 
@@ -347,55 +460,3 @@ TEXT(allocpagesK0, 0)
 	addu	v0,v0,KSEG0
 	jr	t1
 .end allocpagesK0
-
-TEXT(getc0regs, 0)
-	.set noat
-	.set noreorder
-	mfc0	t0,c0_status
-	sw	t0,0(a0)
-	mfc0	t0,c0_cause
-	sw	t0,4(a0)
-	mfc0	t0,c0_epc
-	sw	t0,8(a0)
-	mfc0	t0,c0_ebase
-	sw	t0,0xC(a0)
-	mfc0	t0,c0_config
-	sw	t0,0x10(a0)
-	mfc0	t0,c0_config1
-	sw	t0,0x14(a0)
-	mfc0	t0,c0_config2
-	sw	t0,0x18(a0)
-	mfc0	t0,c0_config3
-	sw	t0,0x1C(a0)
-	mfc0	t0,c0_config7
-	sw	t0,0x20(a0)
-	mfc0	t0,c0_entryhi
-	sw	t0,0x24(a0)
-	mfc0	t0,c0_entrylo0
-	sw	t0,0x28(a0)
-	mfc0	t0,c0_entrylo1
-	sw	t0,0x2C(a0)
-	mfc0	t0,c0_index
-	sw	t0,0x30(a0)
-	mfc0	t0,c0_corectrl
-	sw	t0,0x34(a0)
-	mfc0	t0,c0_corestatus
-	sw	t0,0x38(a0)
-	mfc0	t0,c0_reim
-	sw	t0,0x3C(a0)
-
-	jr	ra
-	nop
-	.set at
-	.set reorder
-.end getc0regs
-
-TEXT(getpc, 0)
-	move	v0,ra
-	jr	ra
-.end getpc
-
-TEXT(dosyscall, 0)
-	syscall
-	jr	ra
-.end dosyscall
