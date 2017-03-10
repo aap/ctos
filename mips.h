@@ -6,4 +6,4 @@
 #define PAGE_SIZE 0x1000
 #define PAGE_SHIFT 0xC
 
-#define MACHADDR 0xFFFFE000
+#define CPUADDR 0xFFFFE000

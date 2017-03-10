@@ -81,11 +81,11 @@ SysNumpages:	.space 4
 
 
 	.struct 0
-MachNumber:		.space 4
-MachCachePolicy:	.space 4
-MachTLBsize:		.space 4
-MachKernelStack:	.space 4
-MachInterruptStack:	.space 4
+CpuNumber:		.space 4
+CpuCachePolicy:		.space 4
+CpuTLBsize:		.space 4
+CpuKernelStack:		.space 4
+CpuInterruptStack:	.space 4
 
 
 	.struct 0
@@ -114,8 +114,6 @@ CtxS6:	.space 4
 CtxS7:	.space 4
 CtxT8:	.space 4
 CtxT9:	.space 4
-CtxK0:	.space 4
-CtxK1:	.space 4
 CtxGp:	.space 4
 CtxSp:	.space 4
 CtxFp:	.space 4

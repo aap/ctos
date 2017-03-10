@@ -5,7 +5,7 @@
 #define GET16(a)    (*(ushort*)(a))
 #define GET32(a)    (*(uint*)(a))
 
-void getc0regs(Cpu *cpu);
+void getc0regs(C0 *c0);
 void dosyscall(void);
 
 void putchar(int c);

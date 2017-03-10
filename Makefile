@@ -6,7 +6,7 @@ OBJCOPY=$(PREFIX)-objcopy
 #CFLAGS=-march=mips32r2 -mno-abicalls -fno-pic -ffreestanding
 CFLAGS=-march=mips32r2 -mno-abicalls -ffreestanding
 
-OBJS=start.o temp.o main.o uart.o timer.o prf.o
+OBJS=start.o tmps.o tmpc.o main.o uart.o timer.o prf.o
 
 /srv/tftp/ci20.bin: ci20.bin
 	cp ci20.bin /srv/tftp/ci20.bin

@@ -5,13 +5,53 @@ typedef unsigned int uint;
 typedef unsigned long ulong;
 typedef unsigned long uintptr;
 
-typedef struct Cpu Cpu;
+typedef struct C0 C0;
 typedef struct Sys Sys;
 typedef struct Context Context;
-typedef struct Mach Mach;
+typedef struct Cpu Cpu;
 
-// temporary
-struct Cpu
+typedef struct C0Cause C0Cause;
+struct C0Cause
+{
+	uint	: 2,
+		exccode : 5,
+		: 1,
+		ip : 8,
+		: 6,
+		wp : 1,
+		iv : 1,
+		: 4,
+		ce : 2,
+		: 1,
+		bd : 1;
+};
+
+typedef struct C0Status C0Status;
+struct C0Status
+{
+	uint	ie : 1,
+		exl : 1,
+		erl : 1,
+		ksu : 2,
+		ux : 1,
+		sx : 1,
+		kx : 1,
+		im : 8,
+		: 3,
+		nmi : 1,
+		sr : 1,
+		ts : 1,
+		bev : 1,
+		px : 1,
+		mx : 1,
+		re : 1,
+		fr : 1,
+		rp : 1,
+		cu : 4;
+};
+
+// temporary, for debugging
+struct C0
 {
 	int status;
 	int cause;
@@ -48,7 +88,6 @@ struct Context
 	uint t0, t1, t2, t3, t4, t5, t6, t7;
 	uint s0, s1, s2, s3, s4, s5, s6, s7;
 	uint t8, t9;
-	uint k0, k1;
 	uint gp;
 	uint sp;
 	uint fp;
@@ -60,10 +99,10 @@ struct Context
 	uint status;
 };
 
-#define NUMMACH 2
+#define NUMCPU 2
 
 // Per processor state
-struct Mach
+struct Cpu
 {
 	int number;
 	int cachePolicy;
@@ -71,5 +110,5 @@ struct Mach
 	uint *kernelStack;
 	uint *interruptStack;
 };
-#define mach ((Mach*)MACHADDR)
-Mach *machs[NUMMACH];
+#define cpu ((Cpu*)CPUADDR)
+Cpu *cpus[NUMCPU];

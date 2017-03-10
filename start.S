@@ -140,6 +140,9 @@ TEXT(startup, 0)
 	mtc0	zero,c0_ebase		// exception base 0x80000000
 	mtc0	zero,c0_intctl		// all interrupts at same vector
 	mtc0	zero,c0_pagemask	// 4k pages
+	mfc0	t0,c0_cause
+	and	t0,t0,~0x00800000	// disable special interrupt vector
+	mtc0	t0,c0_cause
 	li	t1,1
 	mtc0	t1,c0_wired
 
@@ -160,11 +163,6 @@ TEXT(startup, 0)
 	li	a0,KSEG0+0x180
 	la	a1,TrapGeneral
 	la	a2,TrapGeneral_end
-	jal	copy
-	// interrupt
-	li	a0,KSEG0+0x200
-	la	a1,Interrupt
-	la	a2,Interrupt_end
 	jal	copy
 	.set noreorder
 
@@ -221,21 +219,21 @@ TEXT(startup, 0)
 	tlbwi
 
 	// save processor config
-	sw	s6,MACHADDR + MachNumber
-	sw	s0,MACHADDR + MachCachePolicy
-	sw	t1,MACHADDR + MachTLBsize
+	sw	s6,CPUADDR + CpuNumber
+	sw	s0,CPUADDR + CpuCachePolicy
+	sw	t1,CPUADDR + CpuTLBsize
 
 	// Get 16k for the kernel stack
 	jal	allocpagesK0
 	li	a0,4
 	addiu	sp,v0,4*PAGE_SIZE
-	sw	sp,MACHADDR + MachKernelStack
+	sw	sp,CPUADDR + CpuKernelStack
 
-	// Get 8k for the interrupt stack
-	jal	allocpagesK0
-	li	a0,2
-	addiu	sp,v0,2*PAGE_SIZE
-	sw	sp,MACHADDR + MachInterruptStack
+//	// Get 8k for the interrupt stack
+//	jal	allocpagesK0
+//	li	a0,2
+//	addiu	sp,v0,2*PAGE_SIZE
+//	sw	sp,CPUADDR + CpuInterruptStack
 
 	bnez	s6,2f
 	nop
@@ -267,8 +265,7 @@ TEXT(startprocB, 0)
 	sw	t2,0x28(t1)
 
 	mfc0	t0,c0_corectrl
-	li	t1,~2
-	and	t0,t0,t1	// take out of reset
+	and	t0,t0,~2	// take out of reset
 	ori	t0,t0,0x200	// use dedicated entry
 	mtc0	t0,c0_corectrl
 
@@ -279,7 +276,7 @@ TEXT(startprocB, 0)
 TEXT(enableint, 0)
 	.set noreorder
 	mfc0	t0,c0_status
-	ori	t0,t0,0x0401	// enable interrupts
+	ori	t0,t0,0x0401	// enable interrupt 0
 	mtc0	t0,c0_status
 	jr	ra
 	ehb
@@ -301,6 +298,9 @@ TrapCache:
 	nop
 TrapCache_end:
 
+// should save: epc, status, cause, badvaddr
+
+/*
 TrapGeneral:
 	move	k0,ra
 	la	t0,generalExcept
@@ -313,12 +313,110 @@ TrapGeneral:
 	nop
 	eret
 TrapGeneral_end:
+*/
 
+TrapGeneral:
+	mfc0	k0,c0_status
+	andi	k0,0x10		// user mode flag
+	beq	k0,zero,1f	// eq if kernel
+	 move	k1,sp
+	// user - get fresh kernel stack
+	lw	sp,CPUADDR + CpuKernelStack
+1:
+	addiu	sp,sp,CtxSize
+
+	sw	AT,CtxAt(sp)
+	sw	v0,CtxV0(sp)
+	sw	v1,CtxV1(sp)
+	sw	a0,CtxA0(sp)
+	sw	a1,CtxA1(sp)
+	sw	a2,CtxA2(sp)
+	sw	a3,CtxA3(sp)
+	sw	t0,CtxT0(sp)
+	sw	t1,CtxT1(sp)
+	sw	t2,CtxT2(sp)
+	sw	t3,CtxT3(sp)
+	sw	t4,CtxT4(sp)
+	sw	t5,CtxT5(sp)
+	sw	t6,CtxT6(sp)
+	sw	t7,CtxT7(sp)
+	sw	s0,CtxS0(sp)
+	sw	s1,CtxS1(sp)
+	sw	s2,CtxS2(sp)
+	sw	s3,CtxS3(sp)
+	sw	s4,CtxS4(sp)
+	sw	s5,CtxS5(sp)
+	sw	s6,CtxS6(sp)
+	sw	s7,CtxS7(sp)
+	sw	t8,CtxT8(sp)
+	sw	t9,CtxT9(sp)
+	sw	gp,CtxGp(sp)
+	sw	k1,CtxSp(sp)
+	sw	fp,CtxFp(sp)
+	sw	ra,CtxRa(sp)
+	mflo	t0
+	mfhi	t1
+	sw	t0,CtxLo(sp)
+	sw	t1,CtxHi(sp)
+	mfc0	t2,c0_epc
+	sw	t2,CtxEpc(sp)
+	mfc0	t3,c0_cause
+	sw	t3,CtxCause(sp)
+	mfc0	t4,c0_status
+	sw	t4,CtxStatus(sp)
+
+	la	t0,generalExcept
+	jalr	t0
+	move	a0,sp
+
+	lw	t2,CtxEpc(sp)
+	mtc0	t2,c0_epc
+	lw	t1,CtxHi(sp)
+	lw	t0,CtxLo(sp)
+	mthi	t1
+	mtlo	t0
+	lw	AT,CtxAt(sp)
+	lw	v0,CtxV0(sp)
+	lw	v1,CtxV1(sp)
+	lw	a0,CtxA0(sp)
+	lw	a1,CtxA1(sp)
+	lw	a2,CtxA2(sp)
+	lw	a3,CtxA3(sp)
+	lw	t0,CtxT0(sp)
+	lw	t1,CtxT1(sp)
+	lw	t2,CtxT2(sp)
+	lw	t3,CtxT3(sp)
+	lw	t4,CtxT4(sp)
+	lw	t5,CtxT5(sp)
+	lw	t6,CtxT6(sp)
+	lw	t7,CtxT7(sp)
+	lw	s0,CtxS0(sp)
+	lw	s1,CtxS1(sp)
+	lw	s2,CtxS2(sp)
+	lw	s3,CtxS3(sp)
+	lw	s4,CtxS4(sp)
+	lw	s5,CtxS5(sp)
+	lw	s6,CtxS6(sp)
+	lw	s7,CtxS7(sp)
+	lw	t8,CtxT8(sp)
+	lw	t9,CtxT9(sp)
+	lw	gp,CtxGp(sp)
+	lw	fp,CtxFp(sp)
+	lw	ra,CtxRa(sp)
+
+	lw	sp,CtxSp(sp)
+	eret
+
+TrapGeneral_end:
+.set reorder
+.set at
+
+/*
 Interrupt:
 	.set noreorder
 	.set noat
 
-	lw	k0,MACHADDR + MachInterruptStack
+	lw	k0,CPUADDR + CpuInterruptStack
 	addiu	k0,k0,CtxSize
 	sw	AT,CtxAt(k0)
 	sw	v0,CtxV0(k0)
@@ -410,8 +508,7 @@ Interrupt:
 	.set reorder
 	.set at
 Interrupt_end:
-.set reorder
-.set at
+*/
 
 TEXT(flushcaches, 0)
 	.set noreorder
